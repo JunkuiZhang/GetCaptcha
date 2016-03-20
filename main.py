@@ -1,5 +1,4 @@
 import poplib
-import email
 from email.header import Header
 from email.parser import Parser
 from email.header import decode_header
@@ -18,6 +17,9 @@ class GetCaptchaData:
 		self.pwd = PWD
 		self.server = "pop.126.com"
 		self.str = ""
+		self.subject = ""
+		self.last_download = ""
+		self.email_time = ""
 
 	def main(self):
 		server = poplib.POP3(self.server)
@@ -47,6 +49,7 @@ class GetCaptchaData:
 					if value:
 						if header == "Subject":
 							value = decode_str(value)
+							self.subject = value
 						else:
 							hdr, addr = parseaddr(value)
 							name = decode_str(hdr)
@@ -65,39 +68,67 @@ class GetCaptchaData:
 					charset = guess_charset(msg)
 					if charset:
 						content = content.decode(charset)
-					print("%sText: %s" % ("  "* indent, content + "..."))
+					print("%sText: %s" % ("  " * indent, content + "..."))
 					self.str = content
 				else:
 					print("%sAttachment: %s" % ("  " * indent, content_type))
 		if not os.path.exists("./Data"):
 			os.mkdir("./Data")
-		num = 0
+			num = 0
+			_index = True
+		elif os.path.exists("./Data/Info.csv"):
+			f = open("./Data/Info.csv", "r", newline="")
+			reader = csv.reader(f)
+			print("=="*20)
+			for line in reader:
+				self.last_download, num = line
+				num = int(num)
+			f.close()
+			_index = False
+		else:
+			num = 0
+			_index = True
+		jump = False
 		for index in range(1, len(mails) + 1):
 			resp, lines, octets = server.retr(index)
-			# msg_content = email.message_from_bytes(b"\n".join(lines))
 			msg_content = b'\n'.join(lines).decode("utf-8")
 			msg = Parser().parsestr(msg_content)
-			print_info(msg)
-			for part in msg.walk():
-				file_name = part.get_filename()
-				h = Header(file_name)
-				dh = decode_header(h)
-				if part.get("Content-Disposition") is None:
+			self.email_time = msg["Date"]
+			if not _index:
+				if self.last_download != self.email_time and not jump:
 					continue
-				file_name = dh[0][0]
-				if file_name:
-					num += 1
-					print("=="*15)
-					print("Saving %sth images..." % num)
-					f_csv = open("./Data/captcha_info.csv", "a", newline="")
-					w = csv.writer(f_csv)
-					w.writerow([self.str, str(num) + ".jpg"])
-					f_csv.close()
-					file_name = "./Data/" + str(num) + ".jpg"
-					file_data = part.get_payload(decode=True)
-					f = open(file_name, "wb")
-					f.write(file_data)
-					f.close()
+				elif self.last_download == self.email_time:
+					jump = True
+					continue
+			print_info(msg)
+			if self.subject == "<!CAPTCHA!>":
+				for part in msg.walk():
+					file_name = part.get_filename()
+					h = Header(file_name)
+					dh = decode_header(h)
+					if part.get("Content-Disposition") is None:
+						continue
+					file_name = dh[0][0]
+					if file_name:
+						num += 1
+						print("=="*15)
+						print("Saving %sth images..." % num)
+						f_csv = open("./Data/captcha_info.csv", "a", newline="")
+						w = csv.writer(f_csv)
+						w.writerow([self.str, str(num) + ".jpg"])
+						f_csv.close()
+						file_name = "./Data/" + str(num) + ".jpg"
+						file_data = part.get_payload(decode=True)
+						f = open(file_name, "wb")
+						f.write(file_data)
+						f.close()
+			else:
+				continue
+		if _index:
+			f = open("./Data/Info.csv", "w", newline="")
+			w = csv.writer(f)
+			w.writerow([self.email_time, num])
+			f.close()
 		server.quit()
 
 
