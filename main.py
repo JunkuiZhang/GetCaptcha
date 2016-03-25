@@ -72,6 +72,7 @@ class GetCaptchaData:
 					self.str = content
 				else:
 					print("%sAttachment: %s" % ("  " * indent, content_type))
+		num = 0
 		if not os.path.exists("./Data"):
 			os.mkdir("./Data")
 			num = 0
@@ -124,7 +125,7 @@ class GetCaptchaData:
 						f.close()
 			else:
 				continue
-		if _index:
+		if not _index:
 			f = open("./Data/Info.csv", "w", newline="")
 			w = csv.writer(f)
 			w.writerow([self.email_time, num])
