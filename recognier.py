@@ -93,17 +93,48 @@ class GetCaptchaData:
 				if self.state:
 					single_string.save("./Data/train_data/%s" % (str(num)+".jpg"))
 				else:
-					single_string.save("./Data/test_data/%s" % (str(num) + ".jpg"))
+					single_string.save("./get_captcha/test_data/%s" % (str(num) + ".jpg"))
 
 		if self.state:
 			num = 0
 			for f in os.listdir("./Data/train/"):
 				image = Image.open("./Data/train/" + f)
-				working(image, num)
+				pixes_data = image.load()
+				min_x = 0
+				max_x = 0
+				min_y = 0
+				for i in range(image.size[0]):
+					for j in range(image.size[1]):
+						if pixes_data[i, j] == (0, 0, 0):
+							min_x = i
+							break
+					if min_x != 0:
+						break
+				for i in reversed(range(image.size[0])):
+					for j in range(image.size[1]):
+						if pixes_data[i, j] == (0, 0, 0):
+							max_x = i
+							break
+					if max_x != 0:
+						break
+				for j in reversed(range(image.size[1])):
+					for i in range(image.size[0]):
+						if pixes_data[i, j] == (0, 0, 0):
+							min_y = j
+							break
+					if min_y != 0:
+						break
+				single_s = []
+				for n in range(5):
+					single_s.append(image.crop((min_x + 14 * n, min_y - 20, min_x + 14 * (n + 1), min_y)))
+				for single_string in single_s:
+					num += 1
+					if self.state:
+						single_string.save("./Data/train_data/%s" % (str(num)+".jpg"))
+					else:
+						single_string.save("./get_captcha/test_data/%s" % (str(num) + ".jpg"))
 		else:
 			working(img, 0)
-
-
 
 
 class NeuralNetwork:
@@ -112,12 +143,13 @@ class NeuralNetwork:
 		self.num_examples = len(os.listdir("./Data/train_data/"))
 		self.epsilon = 0.01
 		self.reg_lambda = 0.01
-		self.nn_hdim = 80
+		self.nn_hdim = 65
 		self.X = self.get_x(path="./Data/train_data/")
 		self.captcha_stuff = GetCaptchaData(training=True)
 		self.y = self.get_y()
 		self.nn_input_dim = len(self.X[0])
 		self.nn_output_dim = len(self.y[0])
+		self.learning_rate = 0.5
 
 	def get_x(self, path):
 		x = []
@@ -129,12 +161,24 @@ class NeuralNetwork:
 		image = Image.open(path)
 		pixes = image.load()
 		array = []
-		for i in range(14):
-			for j in range(20):
+		# for i in range(14):
+		# 	for j in range(20):
+		# 		num = 0
+		# 		if pixes[i, j] == (0, 0, 0):
+		# 			num += 1
+		# 		elif pixes[i, j] == (255, 255, 255):
+		# 			num += 1
+		# 		array.append(num)
+		for i in range(7):
+			for j in range(10):
 				num = 0
 				if pixes[i, j] == (0, 0, 0):
 					num += 1
-				elif pixes[i, j] == (255, 255, 255):
+				if pixes[i+1, j] == (0, 0, 0):
+					num += 1
+				if pixes[i, j+1] == (0, 0, 0):
+					num += 1
+				if pixes[i+1, j+1] == (0, 0, 0):
 					num += 1
 				array.append(num)
 		return array
@@ -165,7 +209,7 @@ class NeuralNetwork:
 				y.append(l)
 		return numpy.array(y)
 
-	def build_model(self, num_passes=20000, print_loss=False):
+	def build_model(self, num_passes=10000, print_loss=False):
 
 		def sigmoid(x, deriv=False):
 			if deriv:
@@ -194,10 +238,10 @@ class NeuralNetwork:
 				l1_delta = l2_delta.dot(W2.T) * sigmoid(o1, deriv=True)
 
 				# W1 -= numpy.dot(x.T, l1_delta)
-				W1 -= 0.2 * x.T.reshape(self.nn_input_dim, 1) @ l1_delta.reshape(1, self.nn_hdim)
-				W2 -= 0.2 * (o1.T).dot(l2_delta)
-				b1 -= 0.2 * l1_delta
-				b2 -= 0.2 * l2_delta
+				W1 -= self.learning_rate * x.T.reshape(self.nn_input_dim, 1) @ l1_delta.reshape(1, self.nn_hdim)
+				W2 -= self.learning_rate * (o1.T).dot(l2_delta)
+				b1 -= self.learning_rate * l1_delta
+				b2 -= self.learning_rate * l2_delta
 			# x = self.X
 			# y = self.y
 			# l1 = sigmoid(numpy.dot(x, W1))
@@ -234,31 +278,38 @@ class NeuralNetwork:
 			f = open("net.txt", "rb")
 			model = pickle.load(f)
 			f.close()
-		# model = self.build_model()
+		# model = self.build_model(print_loss=True)
 		session = requests.session()
 		res = session.get("http://210.42.121.241/servlet/GenImg")
 		print("Done")
-		f = open("test.jpg", "wb")
+		f = open("./get_captcha/test.jpg", "wb")
 		f.write(res.content)
 		f.close()
 
 		data = GetCaptchaData(training=False)
-		img = data.get_white_black_image("", "test.jpg")
+		img = data.get_white_black_image("", "./get_captcha/test.jpg")
 		data.get_blocks_from_image(img)
 
-		X = self.get_x("./Data/test_data/")
+		X = self.get_x("./get_captcha/test_data/")
 		out = []
 		for x in X:
-			out.append(sigmoid(x.dot(model["W1"]) + model["b1"]).dot(model["W2"]) + model["b2"])
+			i1 = x.dot(model["W1"])
+			o1 = sigmoid(i1 + model["b1"])
+			i2 = o1.dot(model["W2"])
+			o2 = sigmoid(i2 + model["b2"])
+			out.append(o2)
 		c = self.get_captcha_strings_y()
 		ca = []
-		print(len(out))
+		# print(len(out))
 		for o in out:
 			m = numpy.argmax(o[0])
 			ca.append(c[m])
+		# print(out)
 		print(ca)
+		print(self.nn_output_dim)
 
 
+# t = GetCaptchaData(True)
 n = NeuralNetwork()
 n.run()
 # n.build_model()
