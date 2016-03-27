@@ -4,6 +4,7 @@ import csv
 import numpy
 import requests
 import pickle
+import random
 
 
 class GetCaptchaData:
@@ -139,17 +140,20 @@ class GetCaptchaData:
 
 class NeuralNetwork:
 
-	def __init__(self):
+	def __init__(self, n=1):
 		self.num_examples = len(os.listdir("./Data/train_data/"))
 		self.epsilon = 0.01
 		self.reg_lambda = 0.01
-		self.nn_hdim = 65
+		self.nn_hdim = 60
+		self.nn_h2dim = False
+		if n == 2:
+			self.nn_h2dim = self.nn_hdim
 		self.X = self.get_x(path="./Data/train_data/")
 		self.captcha_stuff = GetCaptchaData(training=True)
 		self.y = self.get_y()
 		self.nn_input_dim = len(self.X[0])
 		self.nn_output_dim = len(self.y[0])
-		self.learning_rate = 0.5
+		self.learning_rate = 0.2
 
 	def get_x(self, path):
 		x = []
@@ -161,24 +165,10 @@ class NeuralNetwork:
 		image = Image.open(path)
 		pixes = image.load()
 		array = []
-		# for i in range(14):
-		# 	for j in range(20):
-		# 		num = 0
-		# 		if pixes[i, j] == (0, 0, 0):
-		# 			num += 1
-		# 		elif pixes[i, j] == (255, 255, 255):
-		# 			num += 1
-		# 		array.append(num)
-		for i in range(7):
-			for j in range(10):
+		for i in range(14):
+			for j in range(20):
 				num = 0
 				if pixes[i, j] == (0, 0, 0):
-					num += 1
-				if pixes[i+1, j] == (0, 0, 0):
-					num += 1
-				if pixes[i, j+1] == (0, 0, 0):
-					num += 1
-				if pixes[i+1, j+1] == (0, 0, 0):
 					num += 1
 				array.append(num)
 		return array
@@ -209,50 +199,91 @@ class NeuralNetwork:
 				y.append(l)
 		return numpy.array(y)
 
-	def build_model(self, num_passes=10000, print_loss=False):
+	def build_model(self, num_passes=3000, print_loss=False):
 
 		def sigmoid(x, deriv=False):
 			if deriv:
 				return x * (1 - x)
 			return 1 / (1 + numpy.exp(-x))
 
-		W1 = 0.2 * numpy.random.random((self.nn_input_dim, self.nn_hdim)) - 0.1
-		b1 = numpy.zeros((1, self.nn_hdim))
-		W2 = 0.2 * numpy.random.random((self.nn_hdim, self.nn_output_dim)) - 0.1
-		b2 = numpy.zeros((1, self.nn_output_dim))
+		# def sigmoid(x, deriv=False):
+		# 	if deriv:
+		# 		return 1 - numpy.power(x, 2)
+		# 	return numpy.tanh(x)
 
+		if self.nn_h2dim:
+			W1 = 0.2 * numpy.random.random((self.nn_input_dim, self.nn_hdim)) - 0.1
+			b1 = numpy.zeros((1, self.nn_hdim))
+			W2 = 0.2 * numpy.random.random((self.nn_hdim, self.nn_h2dim)) - 0.1
+			b2 = numpy.zeros((1, self.nn_h2dim))
+			W3 = 0.2 * numpy.random.random((self.nn_hdim, self.nn_output_dim)) - 0.1
+			b3 = numpy.zeros((1, self.nn_output_dim))
+		else:
+			W1 = 0.2 * numpy.random.random((self.nn_input_dim, self.nn_hdim)) - 0.1
+			b1 = numpy.zeros((1, self.nn_hdim))
+			W2 = 0.2 * numpy.random.random((self.nn_hdim, self.nn_output_dim)) - 0.1
+			b2 = numpy.zeros((1, self.nn_output_dim))
+
+		l = random.sample(range(len(self.X)), 1 * len(self.X)//2)
 		for i in range(0, num_passes):
-			# print(i)
-			# print("=="*20)
-			# for n in range(len(self.X)):
-			for n in range(len(self.X)):
+			for n in l:
 				x = self.X[n]
 				y = self.y[n]
 
-				i1 = numpy.dot(x, W1)
-				o1 = sigmoid(i1 + b1)
-				i2 = numpy.dot(o1, W2)
-				o2 = sigmoid(i2 + b2)
+				if self.nn_h2dim:
+					i1 = numpy.dot(x, W1)
+					o1 = sigmoid(i1 + b1)
+					i2 = numpy.dot(o1, W2)
+					o2 = sigmoid(i2 + b2)
+					i3 = numpy.dot(o2, W3)
+					o3 = sigmoid(i3 + b3)
 
-				l2_delta = sigmoid(o2, deriv=True) * (o2 - y)
-				l1_delta = l2_delta.dot(W2.T) * sigmoid(o1, deriv=True)
+					l3_delta = sigmoid(o3, deriv=True) * (o3 - y)
+					l2_delta = l3_delta.dot(W3.T) * sigmoid(o2, deriv=True)
+					l1_delta = l2_delta.dot(W2.T) * sigmoid(o1, deriv=True)
 
-				# W1 -= numpy.dot(x.T, l1_delta)
-				W1 -= self.learning_rate * x.T.reshape(self.nn_input_dim, 1) @ l1_delta.reshape(1, self.nn_hdim)
-				W2 -= self.learning_rate * (o1.T).dot(l2_delta)
-				b1 -= self.learning_rate * l1_delta
-				b2 -= self.learning_rate * l2_delta
-			# x = self.X
-			# y = self.y
-			# l1 = sigmoid(numpy.dot(x, W1))
-			# l2 = sigmoid(numpy.dot(l1, W2))
-			#
-			# l2_error = l2 - y
-			# l2_delta = l2_error * sigmoid(l2, deriv=True)
-			# l1_delta = l2_delta.dot(W2.T) * sigmoid(l1, deriv=True)
-			# W2 -= 0.5 * (l1.T).dot(l2_delta)
-			# W1 -= 0.5 * (x.T).dot(l1_delta)
+					W1 -= self.learning_rate * x.T.reshape(self.nn_input_dim, 1) @ l1_delta.reshape(1, self.nn_hdim)
+					W2 -= self.learning_rate * o1.T.dot(l2_delta)
+					W3 -= self.learning_rate * o2.T.dot(l3_delta)
 
+					b1 -= self.learning_rate * l1_delta
+					b2 -= self.learning_rate * l2_delta
+					b3 -= self.learning_rate * l3_delta
+				else:
+					i1 = numpy.dot(x, W1)
+					o1 = sigmoid(i1 + b1)
+					i2 = numpy.dot(o1, W2)
+					o2 = sigmoid(i2 + b2)
+
+					l2_delta = sigmoid(o2, deriv=True) * (o2 - y)
+					l1_delta = l2_delta.dot(W2.T) * sigmoid(o1, deriv=True)
+
+					W1 -= self.learning_rate * x.T.reshape(self.nn_input_dim, 1) @ l1_delta.reshape(1, self.nn_hdim)
+					W2 -= self.learning_rate * (o1.T).dot(l2_delta)
+					b1 -= self.learning_rate * l1_delta
+					b2 -= self.learning_rate * l2_delta
+
+			if print_loss and i % 100 == 0:
+				if self.nn_h2dim:
+					print("Loss after iteration %i: %s" %(i, str(self.calculate_loss(o3, y))))
+				else:
+					print("Loss after iteration %i: %s" %(i, str(self.calculate_loss(o2, y))))
+
+		if self.nn_h2dim:
+				model = {
+					"W1": W1,
+					"b1": b1,
+					"W2": W2,
+					"b2": b2,
+					"W3": W3,
+					"b3": b3
+				}
+
+				f = open("net2.txt", "wb")
+				pickle.dump(model, f)
+				f.close()
+
+		else:
 			model = {
 				"W1": W1,
 				"b1": b1,
@@ -260,11 +291,10 @@ class NeuralNetwork:
 				"b2": b2
 			}
 
-			if print_loss and i % 1000 == 0:
-				print("Loss after iteration %i: %s" %(i, str(self.calculate_loss(o2, y))))
-		f = open("net.txt", "wb")
-		pickle.dump(model, f)
-		f.close()
+			f = open("net1.txt", "wb")
+			pickle.dump(model, f)
+			f.close()
+
 		return model
 
 	def run(self):
@@ -272,12 +302,23 @@ class NeuralNetwork:
 		def sigmoid(x):
 			return 1 / (1 + numpy.exp(-x))
 
-		if not os.path.exists("./net.txt"):
-			model = self.build_model(print_loss=True)
+		# def sigmoid(x):
+		# 	return numpy.tanh(x)
+
+		if self.nn_h2dim:
+			if not os.path.exists("./net2.txt"):
+				model = self.build_model(print_loss=True)
+			else:
+				f = open("net2.txt", "rb")
+				model = pickle.load(f)
+				f.close()
 		else:
-			f = open("net.txt", "rb")
-			model = pickle.load(f)
-			f.close()
+			if not os.path.exists("./net1.txt"):
+				model = self.build_model(print_loss=True)
+			else:
+				f = open("net1.txt", "rb")
+				model = pickle.load(f)
+				f.close()
 		# model = self.build_model(print_loss=True)
 		session = requests.session()
 		res = session.get("http://210.42.121.241/servlet/GenImg")
@@ -292,24 +333,41 @@ class NeuralNetwork:
 
 		X = self.get_x("./get_captcha/test_data/")
 		out = []
-		for x in X:
-			i1 = x.dot(model["W1"])
-			o1 = sigmoid(i1 + model["b1"])
-			i2 = o1.dot(model["W2"])
-			o2 = sigmoid(i2 + model["b2"])
-			out.append(o2)
+		if self.nn_h2dim:
+			for x in X:
+				i1 = x.dot(model["W1"])
+				o1 = sigmoid(i1 + model["b1"])
+				i2 = o1.dot(model["W2"])
+				o2 = sigmoid(i2 + model["b2"])
+				i3 = o2.dot(model["W3"])
+				o3 = sigmoid(i3 + model["b3"])
+				out.append(o3)
+		else:
+			for x in X:
+				i1 = x.dot(model["W1"])
+				o1 = sigmoid(i1 + model["b1"])
+				i2 = o1.dot(model["W2"])
+				o2 = sigmoid(i2 + model["b2"])
+				out.append(o2)
 		c = self.get_captcha_strings_y()
 		ca = []
 		# print(len(out))
 		for o in out:
-			m = numpy.argmax(o[0])
+			o = abs(o - 1)
+			m = numpy.argmin(o[0])
 			ca.append(c[m])
 		# print(out)
+		print(ca)
+		ca = []
+		for o in out:
+			m = numpy.argmax(o)
+			ca.append(c[m])
 		print(ca)
 		print(self.nn_output_dim)
 
 
-# t = GetCaptchaData(True)
-n = NeuralNetwork()
-n.run()
-# n.build_model()
+if __name__ == '__main__':
+	# t = GetCaptchaData(True)
+	n = NeuralNetwork(n=2)
+	n.run()
+	# n.build_model()

@@ -16,7 +16,7 @@ while True:
 	url = "http://210.42.121.241/servlet/GenImg"
 	session = requests.session()
 	res = session.get(url)
-	f = open("./get_captcha/test.jpg", "wb")
+	f = open("./get_captcha/0.jpg", "wb")
 	f.write(res.content)
 	f.close()
 

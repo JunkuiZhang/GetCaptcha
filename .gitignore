@@ -2,3 +2,4 @@
 .Rhistory
 data/
 get_captcha/
+*.txt
