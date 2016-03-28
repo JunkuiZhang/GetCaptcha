@@ -141,23 +141,25 @@ class GetCaptchaData:
 class NeuralNetwork:
 
 	def __init__(self, n=1):
-		self.num_examples = len(os.listdir("./Data/train_data/"))
 		self.epsilon = 0.01
 		self.reg_lambda = 0.01
-		self.nn_hdim = 60
+		self.nn_hdim = 90
 		self.nn_h2dim = False
 		if n == 2:
 			self.nn_h2dim = self.nn_hdim
-		self.X = self.get_x(path="./Data/train_data/")
-		self.captcha_stuff = GetCaptchaData(training=True)
+		self.X = self.get_x(path="./Data/train_data2/")
+		# self.captcha_stuff = GetCaptchaData(training=True)
 		self.y = self.get_y()
 		self.nn_input_dim = len(self.X[0])
 		self.nn_output_dim = len(self.y[0])
 		self.learning_rate = 0.2
+		self.num_examples = len(self.X)
 
 	def get_x(self, path):
 		x = []
 		for f in os.listdir(path):
+			if not f.endswith(".jpg"):
+				continue
 			x.append(self.convert_single_string_to_array(path + f))
 		return numpy.array(x)
 
@@ -177,27 +179,57 @@ class NeuralNetwork:
 		loss = 0.5 * numpy.square(o2 - y)
 		return numpy.sum(loss)
 
+	# def get_captcha_strings_y(self):
+	# 	captcha_list = self.captcha_stuff.captcha_string_list
+	# 	l = []
+	# 	for captcha in captcha_list:
+	# 		for s in captcha:
+	# 			if s not in l:
+	# 				l.append(s)
+	# 	return l
+	#
 	def get_captcha_strings_y(self):
-		captcha_list = self.captcha_stuff.captcha_string_list
+		f = open("./Data/train_data2/info.csv", "r")
+		w = csv.reader(f)
 		l = []
-		for captcha in captcha_list:
-			for s in captcha:
-				if s not in l:
-					l.append(s)
+		for line in w:
+			if line[0] not in l:
+				l.append(line[0])
+			else:
+				continue
 		return l
+	# def get_y(self):
+	# 	captcha_list = self.get_captcha_strings_y()
+	# 	captcha = self.captcha_stuff.captcha_string_list
+	# 	y = []
+	# 	for cap in captcha:
+	# 		for s in cap:
+	# 			l = []
+	# 			for n in range(len(captcha_list)):
+	# 				l.append(0)
+	# 			l[captcha_list.index(s)] = 1
+	# 			y.append(l)
+	# 	return numpy.array(y)
 
 	def get_y(self):
-		captcha_list = self.get_captcha_strings_y()
-		captcha = self.captcha_stuff.captcha_string_list
-		y = []
-		for cap in captcha:
-			for s in cap:
-				l = []
-				for n in range(len(captcha_list)):
-					l.append(0)
-				l[captcha_list.index(s)] = 1
-				y.append(l)
-		return numpy.array(y)
+		captcha_list = []
+		string_list = []
+		all_string = []
+		f = open("./Data/train_data2/info.csv", "r")
+		w = csv.reader(f)
+		for line in w:
+			all_string.append(line[0])
+			if line[0] not in string_list:
+				string_list.append(line[0])
+			else:
+				continue
+		for s in all_string:
+			l = []
+			for n in range(len(string_list)):
+				l.append(0)
+			l[string_list.index(s)] = 1
+			captcha_list.append(l)
+		return numpy.array(captcha_list)
 
 	def build_model(self, num_passes=3000, print_loss=False):
 
@@ -224,7 +256,8 @@ class NeuralNetwork:
 			W2 = 0.2 * numpy.random.random((self.nn_hdim, self.nn_output_dim)) - 0.1
 			b2 = numpy.zeros((1, self.nn_output_dim))
 
-		l = random.sample(range(len(self.X)), 1 * len(self.X)//2)
+		# l = random.sample(range(len(self.X)), 1 * len(self.X)//2)
+		l = range(len(self.X))
 		for i in range(0, num_passes):
 			for n in l:
 				x = self.X[n]
@@ -357,17 +390,19 @@ class NeuralNetwork:
 			m = numpy.argmin(o[0])
 			ca.append(c[m])
 		# print(out)
+		# print(ca)
+		# ca = []
+		# print(len(ca))
+		# print(len(c))
+		# for o in out:
+		# 	m = numpy.argmax(o)
+		# 	ca.append(c[m])
 		print(ca)
-		ca = []
-		for o in out:
-			m = numpy.argmax(o)
-			ca.append(c[m])
-		print(ca)
-		print(self.nn_output_dim)
+		# print(self.nn_output_dim)
 
 
 if __name__ == '__main__':
 	# t = GetCaptchaData(True)
-	n = NeuralNetwork(n=2)
+	n = NeuralNetwork(n=1)
 	n.run()
 	# n.build_model()
