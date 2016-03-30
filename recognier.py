@@ -143,7 +143,7 @@ class NeuralNetwork:
 	def __init__(self, n=1):
 		self.epsilon = 0.01
 		self.reg_lambda = 0.01
-		self.nn_hdim = 90
+		self.nn_hdim = 80
 		self.nn_h2dim = False
 		if n == 2:
 			self.nn_h2dim = self.nn_hdim
@@ -403,6 +403,6 @@ class NeuralNetwork:
 
 if __name__ == '__main__':
 	# t = GetCaptchaData(True)
-	n = NeuralNetwork(n=1)
+	n = NeuralNetwork(n=2)
 	n.run()
 	# n.build_model()
